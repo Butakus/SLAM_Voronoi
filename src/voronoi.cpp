@@ -152,14 +152,14 @@ int main(int argc, char const *argv[])
 		}
 	}
 
-	// Compute voronoi?
+	/* Compute voronoi */
 
-	// Second approach: Use pointPolygonTest to build distance maps to each obstacle and take the minimum for each point
+	// Main approach: Use pointPolygonTest to build distance maps to each obstacle and take the minimum for each point
 	int num_contours = obstacles_contours.size();
 	cout << "Final contours: " << num_contours << endl;
 
+	// Distance maps to each contour. Only for visualization and debug.
 	Mat distance_maps[num_contours];
-	Mat draw_distance_map(bin_map.size(), CV_8UC3);
 	for (int i = 0; i < num_contours; ++i)
 	{
 		distance_maps[i] = Mat(bin_map.size(), CV_32FC1);
@@ -170,18 +170,14 @@ int main(int argc, char const *argv[])
 	float min_dist = 99999;
 	vector<Point> voronoi_points;
 
-	// Store the distances from a point to each obstacle to sort them (and the obstacle index)
-	vector<pair<float,int>> point_obstacle_dist;
-	point_obstacle_dist.resize(num_contours);
-
 	for (int i = 0; i < bin_map.rows; ++i)
 	{
 		for (int j = 0; j < bin_map.cols; ++j)
 		{
 			region = -1;
 			min_dist = 9999;
-			point_obstacle_dist.clear();
-			point_obstacle_dist.resize(num_contours);
+			// Store the distances from a point to each obstacle to sort them (and the obstacle index)
+			pair<float,int> point_obstacle_dist[num_contours];
 			if (bin_map.at<uchar>(i,j) == 255)
 			{
 				for (int k = 0; k < num_contours; ++k)
@@ -191,8 +187,8 @@ int main(int argc, char const *argv[])
 					point_obstacle_dist[k] = make_pair(distance, k);
 					//cout << "Dist: " << distance << ", " << distance_maps[k].at<float>(i,j) << endl;
 				}
-				// Sort distances
-				sort(point_obstacle_dist.begin(), point_obstacle_dist.end());
+				// Sort distances (lowest first)
+				sort(point_obstacle_dist, point_obstacle_dist + num_contours);
 				if (num_contours >= 2)
 				{
 					if (abs(point_obstacle_dist[0].first - point_obstacle_dist[1].first) < 1)
@@ -227,11 +223,11 @@ int main(int argc, char const *argv[])
 		}
 	}
 
-	draw_distance_map = map.clone();
-	cvtColor(draw_distance_map, draw_distance_map, CV_GRAY2BGR);
+	Mat voronoi_map = map.clone();
+	cvtColor(voronoi_map, voronoi_map, CV_GRAY2BGR);
 	for (int i = 0; i < voronoi_points.size(); ++i)
 	{
-		draw_distance_map.at<Vec3b>(voronoi_points[i]) = Vec3b(0,0,255);
+		voronoi_map.at<Vec3b>(voronoi_points[i]) = Vec3b(0,0,255);
 	}
 
 	/*
@@ -250,7 +246,9 @@ int main(int argc, char const *argv[])
 	}
 	*/
 	
-	// Visualize distance transform
+
+	/*
+	// Visualize distance transform (only for debug)
 	for (int i = 0; i < num_contours; ++i)
 	{
 		normalize(distance_maps[i], distance_maps[i], 0, 1, NORM_MINMAX);
@@ -259,12 +257,47 @@ int main(int argc, char const *argv[])
 		//waitKey(0);
 	}
 	destroyWindow("distance");
+	*/
 	
-	
-	imshow("draw_distances", draw_distance_map);
+	imshow("voronoi points", voronoi_map);
 	waitKey(0);
 	//imshow("Voronoi", draw_voronoi);
 	//waitKey(0);
+
+
+	// Try to compute the real voronoi graph (nodes and edges) from the set of voronoi points
+	voronoi_map = Mat(bin_map.size(), CV_8UC1, Scalar(0));
+	for (int i = 0; i < voronoi_points.size(); ++i)
+	{
+		voronoi_map.at<uchar>(voronoi_points[i]) = 255;
+	}
+	imshow("voronoi bin", voronoi_map);
+	waitKey(0);
+
+/*
+	// Remove filled areas
+	Canny(voronoi_map, canny_map, 100, 200, 3, false);
+	imshow("voronoi canny", canny_map);
+	waitKey(0);
+*/
+
+/*
+	// Hough lines (probabilistic) to get the line segments
+	// I don't know how to adjust the params to make it work properly...
+	vector<Vec4i> voronoi_lines;
+	HoughLinesP(voronoi_map, voronoi_lines, 1, CV_PI/180, 30, 30, 5);
+	// Draw lines
+	voronoi_map = map.clone();
+	cvtColor(voronoi_map, voronoi_map, CV_GRAY2BGR);
+	for (int i = 0; i < voronoi_lines.size(); ++i)
+	{
+		Vec4i l = voronoi_lines[i];
+	    line(voronoi_map, Point(l[0], l[1]), Point(l[2], l[3]), Scalar(0,0,255), 2, CV_AA);
+	}
+	imshow("voronoi lines", voronoi_map);
+	waitKey(0);
+*/
+
 
 	destroyAllWindows();
 	return 0;
