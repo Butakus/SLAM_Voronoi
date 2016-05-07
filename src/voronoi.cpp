@@ -16,7 +16,7 @@ void compute_skeleton(Mat& src, Mat& dst)
 	
 	Mat element = getStructuringElement(MORPH_CROSS, Size(3, 3));
 	 
-	bool done = false;		
+	bool done = false;
 	while (!done)
 	{
 		erode(skeleton, eroded, element);
@@ -159,7 +159,8 @@ int main(int argc, char const *argv[])
 	cout << "Final contours: " << num_contours << endl;
 
 	// Distance maps to each contour. Only for visualization and debug.
-	Mat distance_maps[num_contours];
+	vector<Mat> distance_maps;
+	distance_maps.resize(num_contours);
 	for (int i = 0; i < num_contours; ++i)
 	{
 		distance_maps[i] = Mat(bin_map.size(), CV_32FC1);
@@ -177,7 +178,8 @@ int main(int argc, char const *argv[])
 			region = -1;
 			min_dist = 9999;
 			// Store the distances from a point to each obstacle to sort them (and the obstacle index)
-			pair<float,int> point_obstacle_dist[num_contours];
+			vector<pair<float,int>> point_obstacle_dist;
+			point_obstacle_dist.resize(num_contours);
 			if (bin_map.at<uchar>(i,j) == 255)
 			{
 				for (int k = 0; k < num_contours; ++k)
@@ -188,7 +190,7 @@ int main(int argc, char const *argv[])
 					//cout << "Dist: " << distance << ", " << distance_maps[k].at<float>(i,j) << endl;
 				}
 				// Sort distances (lowest first)
-				sort(point_obstacle_dist, point_obstacle_dist + num_contours);
+				sort(point_obstacle_dist.begin(), point_obstacle_dist.end());
 				if (num_contours >= 2)
 				{
 					if (abs(point_obstacle_dist[0].first - point_obstacle_dist[1].first) < 1)
