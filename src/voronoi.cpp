@@ -49,15 +49,24 @@ void search_centroids(Mat& points, Point start, vector<Point>& visited_corners, 
 		for (int j = mask_start.x; j < mask_end.x; ++j)
 		{
 			Point current_point = Point(j,i);
-			/*
 			if (points.at<uchar>(i,j) == 0)
 			{
 				// Found obstacle. Create a point in the opposite side of the mask to modify the centroid and avoid the obstacle
-				Point opposite = Point(mask_end.y - i, mask_end.x - j);
-				current_group.push_back(opposite);
-				visited_corners.push_back(opposite);
+				Point opposite;
+				int diff_y = start.y - i;
+				int diff_x = start.x - j;
+				if (diff_y > 0) opposite.y = mask_end.y - diff_y;
+				else opposite.y = mask_start.y - diff_y;
+				if (diff_x > 0) opposite.x = mask_end.x - diff_x;
+				else opposite.x = mask_start.x - diff_x;
+
+				if (points.at<uchar>(opposite) != 0)
+				{
+					// Do not add points where there are obstacles
+					current_group.push_back(opposite);
+					visited_corners.push_back(opposite);
+				}
 			}
-			*/
 			if (points.at<uchar>(i,j) == 100 && find(visited_corners.begin(), visited_corners.end(), current_point) == visited_corners.end())
 			{
 				// Found another corner to compute
@@ -80,6 +89,48 @@ Point compute_centroid(vector<Point>& current_group)
 
 	return centroid;
 }
+
+double euclideanDist(Point p, Point q)
+{
+    Point diff = p - q;
+    return sqrt(diff.x*diff.x + diff.y*diff.y);
+}
+
+void compute_voronoi_graph(Mat& obstacles, vector<Point>& nodes, Mat& distances)
+{
+	distances.setTo(0.0);
+	for (int i = 0; i < nodes.size(); ++i)
+	{
+		for (int j = i+1; j < nodes.size(); ++j)
+		{
+			// Check if there is connection between points
+			LineIterator it(obstacles, nodes[i], nodes[j], 8);
+			bool obstacle_in_line = false;
+			for(int k = 0; k < it.count; k++, ++it)
+			{
+				Point linePoint = it.pos();
+				if (obstacles.at<uchar>(linePoint) == 0)
+				{
+					obstacle_in_line = true;
+					break;
+				}
+			}
+			// Compute distance
+			if (obstacle_in_line)
+			{
+				distances.at<double>(i,j) = -1;
+				distances.at<double>(j,i) = -1;
+			}
+			else
+			{
+				double d = euclideanDist(nodes[i], nodes[j]);
+				distances.at<double>(i,j) = d;
+				distances.at<double>(j,i) = d;
+			}
+		}
+	}
+}
+
 
 
 int main(int argc, char const *argv[])
@@ -283,24 +334,7 @@ int main(int argc, char const *argv[])
 	for (int i = 0; i < voronoi_points.size(); ++i)
 	{
 		voronoi_map.at<Vec3b>(voronoi_points[i]) = Vec3b(0,0,255);
-	}
-
-	/*
-	vector<Point> voronoi_approx;
-	eps = 0.0009;
-	approxPolyDP( Mat(voronoi_points), voronoi_approx, arcLength(Mat(voronoi_points), true)*eps, false);
-
-	cout << "Initial voronoi points: " << voronoi_points.size() << endl;
-	cout << "Initial voronoi length: " << arcLength(Mat(voronoi_points), true) << endl;
-	cout << "Approx voronoi points: " << voronoi_approx.size() << endl;
-	Mat draw_voronoi = map.clone();
-	cvtColor(draw_voronoi, draw_voronoi, CV_GRAY2BGR);
-	for (int i = 0; i < voronoi_approx.size(); ++i)
-	{
-		circle(draw_voronoi, voronoi_approx[i], 5, Scalar(0,0,255), CV_FILLED, 8);
-	}
-	*/
-	
+	}	
 
 	/*
 	// Visualize distance transform (only for debug)
@@ -336,40 +370,13 @@ int main(int argc, char const *argv[])
 	waitKey(0);
 */
 
-/*
-	// Hough lines (probabilistic) to get the line segments
-	// I don't know how to adjust the params to make it work properly...
-	vector<Vec4i> voronoi_lines;
-	HoughLinesP(voronoi_map, voronoi_lines, 1, CV_PI/180, 30, 30, 5);
-	// Draw lines
-	voronoi_map = map.clone();
-	cvtColor(voronoi_map, voronoi_map, CV_GRAY2BGR);
-	for (int i = 0; i < voronoi_lines.size(); ++i)
-	{
-		Vec4i l = voronoi_lines[i];
-	    line(voronoi_map, Point(l[0], l[1]), Point(l[2], l[3]), Scalar(0,0,255), 2, CV_AA);
-	}
-	imshow("voronoi lines", voronoi_map);
-	waitKey(0);
-*/
 
 
-
-voronoi_map = Mat(bin_map.size(), CV_8UC1, Scalar(0));
-    for (int i = 0; i < voronoi_points.size(); ++i)
-    {
-        voronoi_map.at<uchar>(voronoi_points[i]) = 255;
-    }
-    imshow("voronoi bin", voronoi_map);
-    waitKey(0);
-
-/***A partir de aquí es lo nuevo****/
-
+	// Compute skeleton over voronoi points to remove filled areas and detect corners
     Mat skeleton;
     compute_skeleton(voronoi_map, skeleton);
     //imshow("skeleton", skeleton);
     //waitKey(0);
-
 
     Mat dst_norm, dst_norm_scaled, corners;
 
@@ -404,11 +411,14 @@ voronoi_map = Mat(bin_map.size(), CV_8UC1, Scalar(0));
     imshow("puntitos", puntitos);
     waitKey(0);
 
+
+
+    // Take the detected corners and compute their centroids
     vector<Point> visited_corners;
     vector<Point> centroids;
     vector<Point> current_group;
 
-    Mat centroids_map = map.clone();
+    Mat centroids_map = bin_map.clone();
     cvtColor(centroids_map, centroids_map, CV_GRAY2BGR);
     for (int k = 0; k < corners_list.size(); ++k)
     {
@@ -432,7 +442,35 @@ voronoi_map = Mat(bin_map.size(), CV_8UC1, Scalar(0));
     waitKey(0);
 
 
+    // Compute the voronoi graph, being the centroids the nodes
 
+    // Matrix to store the distance between each pair of nodes
+    Mat voronoi_distance_ij = Mat_<double>(centroids.size(), centroids.size());
+    compute_voronoi_graph(bin_map, centroids, voronoi_distance_ij);
+
+    //cout << voronoi_distance_ij << endl;
+
+    // Draw graph
+    Mat centroids_bin_map = bin_map.clone();
+    centroids_map = map.clone();
+    cvtColor(centroids_bin_map, centroids_bin_map, CV_GRAY2BGR);
+    cvtColor(centroids_map, centroids_map, CV_GRAY2BGR);
+    for (int i = 0; i < centroids.size(); ++i)
+    {
+    	for (int j = i+1; j < centroids.size(); ++j)
+    	{
+    		if (voronoi_distance_ij.at<double>(i,j) > 0)
+    		{
+    			line(centroids_map, centroids[i], centroids[j], Scalar(0,255,0), 1, 8);
+    			line(centroids_bin_map, centroids[i], centroids[j], Scalar(0,255,0), 1, 8);
+    		}
+    	}
+    	circle( centroids_map, centroids[i], 4, (255,255,255), CV_FILLED, 8, 0 );
+    	circle( centroids_bin_map, centroids[i], 4, (255,255,255), CV_FILLED, 8, 0 );
+    }
+    imshow("centroids", centroids_map);
+    imshow("centroids bin", centroids_bin_map);
+    waitKey(0);
 
 
 	destroyAllWindows();
