@@ -1,4 +1,5 @@
 #include <iostream>
+#include <algorithm>
 #include <opencv2/opencv.hpp>
 
 using namespace std;
@@ -28,6 +29,58 @@ void compute_skeleton(Mat& src, Mat& dst)
 	}
 	dst = skel.clone();	
 }
+
+
+void search_centroids(Mat& points, Point start, vector<Point>& visited_corners, vector<Point>& current_group)
+{
+	visited_corners.push_back(start);
+	current_group.push_back(start);
+    
+    const int mask_size = 10;
+    Point mask_start, mask_end;
+
+	mask_start.y = max(0, start.y - mask_size);
+	mask_end.y = min(points.rows, start.y + mask_size);
+	mask_start.x = max(0, start.x - mask_size);
+	mask_end.x = min(points.cols, start.x + mask_size);
+
+	for (int i = mask_start.y; i < mask_end.y; ++i)
+	{
+		for (int j = mask_start.x; j < mask_end.x; ++j)
+		{
+			Point current_point = Point(j,i);
+			/*
+			if (points.at<uchar>(i,j) == 0)
+			{
+				// Found obstacle. Create a point in the opposite side of the mask to modify the centroid and avoid the obstacle
+				Point opposite = Point(mask_end.y - i, mask_end.x - j);
+				current_group.push_back(opposite);
+				visited_corners.push_back(opposite);
+			}
+			*/
+			if (points.at<uchar>(i,j) == 100 && find(visited_corners.begin(), visited_corners.end(), current_point) == visited_corners.end())
+			{
+				// Found another corner to compute
+				search_centroids(points, current_point, visited_corners, current_group);
+			}
+		}
+	}
+}
+
+Point compute_centroid(vector<Point>& current_group)
+{
+	Point2f centroid = Point(0,0);
+	for (int i = 0; i < current_group.size(); ++i)
+	{
+		centroid.x += current_group[i].x;
+		centroid.y += current_group[i].y;
+	}
+	centroid.x /= current_group.size();
+	centroid.y /= current_group.size();
+
+	return centroid;
+}
+
 
 int main(int argc, char const *argv[])
 {
@@ -59,7 +112,7 @@ int main(int argc, char const *argv[])
 
 	// Erode and dilate. Why not?
 	// Erode 8 times (make obstacles bigger)
-	erode(bin_map, bin_map, Mat(), Point(-1,-1), 8);
+	erode(bin_map, bin_map, Mat(), Point(-1,-1), 9);
 	//imshow("binary map", bin_map);
 	//waitKey(0);
 
@@ -261,8 +314,8 @@ int main(int argc, char const *argv[])
 	destroyWindow("distance");
 	*/
 	
-	imshow("voronoi points", voronoi_map);
-	waitKey(0);
+	//imshow("voronoi points", voronoi_map);
+	//waitKey(0);
 	//imshow("Voronoi", draw_voronoi);
 	//waitKey(0);
 
@@ -299,6 +352,87 @@ int main(int argc, char const *argv[])
 	imshow("voronoi lines", voronoi_map);
 	waitKey(0);
 */
+
+
+
+voronoi_map = Mat(bin_map.size(), CV_8UC1, Scalar(0));
+    for (int i = 0; i < voronoi_points.size(); ++i)
+    {
+        voronoi_map.at<uchar>(voronoi_points[i]) = 255;
+    }
+    imshow("voronoi bin", voronoi_map);
+    waitKey(0);
+
+/***A partir de aquí es lo nuevo****/
+
+    Mat skeleton;
+    compute_skeleton(voronoi_map, skeleton);
+    //imshow("skeleton", skeleton);
+    //waitKey(0);
+
+
+    Mat dst_norm, dst_norm_scaled, corners;
+
+    cornerHarris( skeleton, corners, 2, 3, 0.01, BORDER_DEFAULT );
+    /// Normalizing
+    normalize( corners, dst_norm, 0, 255, NORM_MINMAX, CV_32FC1, Mat() );
+    convertScaleAbs( dst_norm, dst_norm_scaled );
+
+    //imshow("corners", dst_norm_scaled);
+    //waitKey(0);
+
+    Mat newImg = Mat::zeros(dst_norm_scaled.size(), CV_8UC3);
+    Mat final = map.clone();
+    cvtColor(final, final, CV_GRAY2BGR);
+    vector<Point> corners_list;
+    Mat puntitos = bin_map.clone();
+
+    /// Drawing a circle around corners
+    for( int j = 0; j < dst_norm.rows ; j++ )
+    { for( int i = 0; i < dst_norm.cols; i++ )
+        {
+            if( (int) dst_norm.at<float>(j,i) > 40 && (int) dst_norm.at<float>(j,i) < 180 )
+            {
+            	corners_list.push_back(Point(i,j));
+            	puntitos.at<uchar>(j,i) = 100;
+                circle( final, Point( i, j ), 2,  (255,255,255), 1, 8, 0 );
+            }
+        }
+    }
+    cout << "Puntitos: " << corners_list.size() << endl;
+    imshow("voronoi points", final);
+    imshow("puntitos", puntitos);
+    waitKey(0);
+
+    vector<Point> visited_corners;
+    vector<Point> centroids;
+    vector<Point> current_group;
+
+    Mat centroids_map = map.clone();
+    cvtColor(centroids_map, centroids_map, CV_GRAY2BGR);
+    for (int k = 0; k < corners_list.size(); ++k)
+    {
+    	
+    	current_group.clear();
+    	if (find(visited_corners.begin(), visited_corners.end(), corners_list[k]) == visited_corners.end())
+    	{
+    		// If the point has not been visited
+    		// Get the group of points near to it
+    		search_centroids(puntitos, corners_list[k], visited_corners, current_group);
+    		// Compute centroid of points in current_group
+    		Point centroid = compute_centroid(current_group);
+    		cout << "Group size: " << current_group.size() << endl;
+    		//Point centroid;
+    		centroids.push_back(centroid);
+    		circle( centroids_map, centroid, 4, (255,255,255), CV_FILLED, 8, 0 );
+    	}
+    }
+    cout << "Final centroids: " << centroids.size() << endl;
+    imshow("centroids", centroids_map);
+    waitKey(0);
+
+
+
 
 
 	destroyAllWindows();
