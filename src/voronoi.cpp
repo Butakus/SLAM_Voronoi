@@ -90,6 +90,11 @@ void drawCentroids()
     	circle( centroids_bin_map, centroids[path[i]], 4, Scalar(0,100,255), CV_FILLED, 8, 0 );
     }
 
+    for(auto it=camino.begin();it!=camino.end();it++)
+	{
+		circle( centroids_bin_map, (**it).getCoordinates(), 4, Scalar(0,100,255), CV_FILLED, 8, 0 );
+	}
+
     for (int i = 0; i < centroids.size(); i++)
     {
     	if(centroids[i].x == init.x && centroids[i].y == init.y)
@@ -101,19 +106,26 @@ void drawCentroids()
     imshow("centroids", centroids_bin_map);
 }
 
-void calculatePath()
+void calculatePath(int alg) //alg = 0 -> ACO, alg = 1 -> AStar
 {
 	if(indexInit>-1 && indexFin>-1)
 	{
-	    double path_distance = ACOPlanner(centroids, indexInit, indexFin, voronoi_distance_ij, path);
-	    cout << "Path distance: " << path_distance << ", size: " << path.size() << endl;
-	    cout << "Path: ";
-	    for (int i = 0; i < path.size(); ++i)
-	    {
-	    	cout << path[i] << " - ";
-	    }
-	    cout << endl;
-	    drawCentroids();
+		if(alg == 0)
+		{
+		    double path_distance = ACOPlanner(centroids, indexInit, indexFin, voronoi_distance_ij, path);
+		    cout << "Path distance: " << path_distance << ", size: " << path.size() << endl;
+		    cout << "Path: ";
+		    for (int i = 0; i < path.size(); ++i)
+		    {
+		    	cout << path[i] << " - ";
+		    }
+		    cout << endl;
+		}
+		else if(alg == 1)
+		{
+			camino=get<0>(calculateAStar(grafos[indexInit], grafos[indexFin], euclidean));
+		}
+		drawCentroids();
 	}
 }
 
@@ -144,11 +156,14 @@ void on_mouse(int evt, int x, int y, int flags, void* param) {
         			init=centroids[i];
         			fin=Point(-1,-1);
         			path.clear();
+        			camino.clear();
         		}
         		printf("Centroid: %d \n", i);
         		drawCentroids();
         		if(calc)
-        			calculatePath();
+        		{
+        			calculatePath(1);
+        		}
         	}
         }
     }
@@ -620,6 +635,8 @@ int main(int argc, char const *argv[])
     		{
     			line(centroids_map, centroids[i], centroids[j], Scalar(0,255,0), 1, 8);
     			line(centroids_bin_map, centroids[i], centroids[j], Scalar(0,255,0), 1, 8);
+    			grafos[i]->insertAdjacent(Edge(grafos[j],voronoi_distance_ij.at<double>(i,j)));
+				grafos[j]->insertAdjacent(Edge(grafos[i],voronoi_distance_ij.at<double>(i,j)));
     		}
     	}
     	circle( centroids_map, centroids[i], 4, (255,255,255), CV_FILLED, 8, 0 );
