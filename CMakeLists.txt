@@ -10,5 +10,7 @@ add_definitions (-DROOT_PATH="${CMAKE_SOURCE_DIR}")
 
 find_package(OpenCV REQUIRED)
 
+include_directories(src)
+
 add_executable(voronoi src/voronoi.cpp)
 target_link_libraries(voronoi ${OpenCV_LIBS})

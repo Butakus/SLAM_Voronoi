@@ -1,3 +1,5 @@
+#include "ACOPlanner.cpp"
+
 #include <iostream>
 #include <algorithm>
 #include <opencv2/opencv.hpp>
@@ -88,12 +90,6 @@ Point compute_centroid(vector<Point>& current_group)
 	centroid.y /= current_group.size();
 
 	return centroid;
-}
-
-double euclideanDist(Point p, Point q)
-{
-    Point diff = p - q;
-    return sqrt(diff.x*diff.x + diff.y*diff.y);
 }
 
 void compute_voronoi_graph(Mat& obstacles, vector<Point>& nodes, Mat& distances)
@@ -448,7 +444,7 @@ int main(int argc, char const *argv[])
     Mat voronoi_distance_ij = Mat_<double>(centroids.size(), centroids.size());
     compute_voronoi_graph(bin_map, centroids, voronoi_distance_ij);
 
-    //cout << voronoi_distance_ij << endl;
+    cout << voronoi_distance_ij << endl;
 
     // Draw graph
     Mat centroids_bin_map = bin_map.clone();
@@ -472,6 +468,15 @@ int main(int argc, char const *argv[])
     imshow("centroids bin", centroids_bin_map);
     waitKey(0);
 
+    vector<int> path;
+    double path_distance = ACOPlanner(centroids, 0, 5, voronoi_distance_ij, path);
+    cout << "Path distance: " << path_distance << ", size: " << path.size() << endl;
+    cout << "Path: ";
+    for (int i = 0; i < path.size(); ++i)
+    {
+    	cout << path[i] << " - ";
+    }
+    cout << endl;
 
 	destroyAllWindows();
 	return 0;
