@@ -8,6 +8,57 @@ using namespace cv;
 #define MAP_FILE ROOT_PATH "/data/map_0.png"
 #define WINDOW_SIZE 700
 
+
+// Variables globales
+Mat dilero, before_dilero; // Imagen erosionada y dilatada; Se pone en global para el manejo del trackpad
+const int valor_slider_max = 10;
+const double eps_max = 20;  // Maximo tamaño para el sliderl.
+int valor_slider1, valor_slider2; // Valor de los slider.
+Mat bin_map, frame_mixed;
+int eps_track; // Approximation accuracy. % difference between original arclength and new
+vector<vector<Point>> new_contours;
+vector<vector<Point>> approx_contours;
+
+
+/*
+ * Funcion callback del trackpad de erosion y dilatacion
+ */
+
+void on_trackbar_dilero( int, void* )
+{	
+	erode(before_dilero, dilero, Mat(), Point(-1,-1), valor_slider1);
+	dilate(dilero, dilero, Mat(), Point(-1,-1), valor_slider2);
+	std::cout<<"La mierda de Pou me motiva."<<std::endl;
+ 	imshow( "Dilatacion_Erosion", dilero );
+}
+
+
+/*
+ * Funcion callback para simplificar en poligonos mas simples.
+ */
+void on_trackbar_poligon(int, void*)
+{
+	frame_mixed = bin_map.clone();
+	cvtColor(frame_mixed, frame_mixed, CV_GRAY2BGR);
+
+	double eps = eps_track * 0.001;
+	approx_contours.resize(new_contours.size());
+	//Mat frame_contours2 = Mat::zeros(frame_mixed	.size(), CV_8UC3);
+	for (int i = 0; i < new_contours.size(); ++i)
+	{
+		approxPolyDP( Mat(new_contours[i]), approx_contours[i], arcLength(Mat(new_contours[i]), true)*eps, true);
+		cout << "Approx contour " << i << endl;
+		cout << "\tarea: " << contourArea(approx_contours[i], true) << endl;
+		cout << "\tlength: " << arcLength(Mat(approx_contours[i]), true) << endl;
+		cout << "\tpoints: " << approx_contours[i].size() << endl;
+		//drawContours(frame_contours2, approx_contours, i, Scalar(0,0,255), 1, 8, 0, 0, Point(0,0));
+		drawContours(frame_mixed, approx_contours, i, Scalar(0,0,255), 2, 8, 0, 0, Point(0,0));
+	}
+	//imshow("Contours", frame_contours);
+	imshow("Mixed", frame_mixed);
+}
+
+
 void compute_skeleton(Mat& src, Mat& dst)
 {
 	Mat skeleton = src.clone();
@@ -156,23 +207,36 @@ int main(int argc, char const *argv[])
 	//imshow("original map", map);
 	//waitKey(0);
 
-	Mat bin_map;
 	threshold(map, bin_map, 230, 255, THRESH_BINARY);
 	//imshow("binary map", bin_map);
 	//waitKey(0);
 
-	// Erode and dilate. Why not?
-	// Erode 8 times (make obstacles bigger)
-	erode(bin_map, bin_map, Mat(), Point(-1,-1), 9);
-	//imshow("binary map", bin_map);
-	//waitKey(0);
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+	/*
+	 *	EROSIONAMOS Y DILATAMOS.
+	 *	Aplicamos erosion y dilatacion con trackpad mirar funcion callback superior.
+	 *	Erode and dilate. Why not?
+	 */
+
+	// Clonamos el mapa para  
+	before_dilero = bin_map.clone(); // Clonamos binmap antes de meterselo a diletacion/erosion con trackpad
+	namedWindow("Dilatacion_Erosion", WINDOW_AUTOSIZE);
+	// Create Trackbars
+	std::string TrackbarErosionName = "Erosion";
+	std::string TrackbarDilatacionName = "Dilatacion";
+	createTrackbar( TrackbarErosionName, "Dilatacion_Erosion", &valor_slider1, valor_slider_max, on_trackbar_dilero );
+	createTrackbar( TrackbarDilatacionName, "Dilatacion_Erosion", &valor_slider2, valor_slider_max, on_trackbar_dilero );
+	// Show some stuff
+	on_trackbar_dilero( valor_slider1, 0 );
 	// Dilate 4 times (make free space bigger)
-	dilate(bin_map, bin_map, Mat(), Point(-1,-1), 4);
-	//imshow("binary map", bin_map);
-	//waitKey(0);
+	waitKey(0);
 
-	
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+
 	/*
 	// First approach: Skeleton from dilate + erode
 	Mat skeleton;
@@ -190,7 +254,6 @@ int main(int argc, char const *argv[])
 	cout << "Contours size: " << contours.size() << endl;
 	
 	Mat frame_contours = Mat::zeros(bin_map.size(), CV_8UC3);
-	vector<vector<Point>> new_contours;
 	for (size_t i = 0; i < contours.size(); ++i)
 	{
 		cout << "Contour " << i << endl;
@@ -210,27 +273,30 @@ int main(int argc, char const *argv[])
 	//imshow("Contours", frame_contours);
 	//waitKey(0);
 
-	Mat frame_mixed = bin_map.clone();
-	cvtColor(frame_mixed, frame_mixed, CV_GRAY2BGR);
+
 	
-	// Get approximate polygons to work with less points and simpler forms
-	vector<vector<Point>> approx_contours;
-	approx_contours.resize(new_contours.size());
-	double eps = 0.003; // Approximation accuracy. % difference between original arclength and new
-	frame_contours = Mat::zeros(bin_map.size(), CV_8UC3);
-	for (int i = 0; i < new_contours.size(); ++i)
-	{
-		approxPolyDP( Mat(new_contours[i]), approx_contours[i], arcLength(Mat(new_contours[i]), true)*eps, true);
-		cout << "Approx contour " << i << endl;
-		cout << "\tarea: " << contourArea(approx_contours[i], true) << endl;
-		cout << "\tlength: " << arcLength(Mat(approx_contours[i]), true) << endl;
-		cout << "\tpoints: " << approx_contours[i].size() << endl;
-		drawContours(frame_contours, approx_contours, i, Scalar(0,0,255), 1, 8, 0, 0, Point(0,0));
-		drawContours(frame_mixed, approx_contours, i, Scalar(0,0,255), 2, 8, 0, 0, Point(0,0));
-	}
-	//imshow("Contours", frame_contours);
-	imshow("Mixed", frame_mixed);
+// - - - - - - - - - - - - - - - -- - -  - -- - - - - - - - - - - - - - - -
+
+	/*
+	 * ES: Cogemos poligonos aproximados para trabajar con menos puntos y formas mas simples.
+	 * EN: Get approximate polygons to work with less points and simpler forms
+	 * Se realiza en el callback del trackpad.
+	 * TrackPad : El porcentaje original entre el poligono original y el aproximado
+	 */
+	frame_mixed = bin_map.clone();
+	cvtColor(frame_mixed, frame_mixed, CV_GRAY2BGR);
+	namedWindow("Mixed", WINDOW_AUTOSIZE);
+	/// Create Trackbars
+	std::string TrackbarName = "Precision";
+	createTrackbar( TrackbarName, "Mixed", &eps_track, valor_slider_max, on_trackbar_poligon );
+	/// Show some stuff
+	on_trackbar_poligon( eps_track, 0 );
+	// Esperamos iteracción con teclas
 	waitKey(0);
+
+// - - - - - - - - - - - - - - - -- - -  - -- - - - - - - - - - - - - - - -
+
+
 
 	// Split contours into lines, so each line is considered a different obstacle.
 	vector<vector<Point>> obstacles_contours;
@@ -373,8 +439,8 @@ int main(int argc, char const *argv[])
 
 
 	// Compute skeleton over voronoi points to remove filled areas and detect corners
-    Mat skeleton;
-    compute_skeleton(voronoi_map, skeleton);
+	Mat skeleton;
+	compute_skeleton(voronoi_map, skeleton);
     //imshow("skeleton", skeleton);
     //waitKey(0);
 
