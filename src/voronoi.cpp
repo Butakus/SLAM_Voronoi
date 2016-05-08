@@ -10,6 +10,94 @@ using namespace cv;
 #define MAP_FILE ROOT_PATH "/data/map_0.png"
 #define WINDOW_SIZE 700
 
+vector<Point> centroids;
+Mat voronoi_distance_ij;
+Mat centroids_bin_map;
+Mat bin_map;
+Mat initMap;
+Point init,fin;
+int indexInit, indexFin;
+vector<int> path;
+
+void drawCentroids()
+{
+	centroids_bin_map = initMap.clone();
+    cvtColor(centroids_bin_map, centroids_bin_map, CV_GRAY2RGB);
+    for (int i = 0; i < centroids.size(); i++)
+    {
+    	circle( centroids_bin_map, centroids[i], 4, Scalar(255,0,0), CV_FILLED, 8, 0 );
+    }
+    
+    for (int i = 0; i < path.size(); ++i)
+    {
+    	circle( centroids_bin_map, centroids[path[i]], 4, Scalar(0,100,255), CV_FILLED, 8, 0 );
+    }
+
+    for (int i = 0; i < centroids.size(); i++)
+    {
+    	if(centroids[i].x == init.x && centroids[i].y == init.y)
+    		circle( centroids_bin_map, centroids[i], 4, Scalar(0,255,0), CV_FILLED, 8, 0 );
+    	else if(centroids[i].x == fin.x && centroids[i].y == fin.y)
+    		circle( centroids_bin_map, centroids[i], 4, Scalar(0,0,255), CV_FILLED, 8, 0 );
+    }
+
+    imshow("centroids", centroids_bin_map);
+}
+
+void calculatePath()
+{
+	if(indexInit>-1 && indexFin>-1)
+	{
+	    double path_distance = ACOPlanner(centroids, indexInit, indexFin, voronoi_distance_ij, path);
+	    cout << "Path distance: " << path_distance << ", size: " << path.size() << endl;
+	    cout << "Path: ";
+	    for (int i = 0; i < path.size(); ++i)
+	    {
+	    	cout << path[i] << " - ";
+	    }
+	    cout << endl;
+	    drawCentroids();
+	}
+}
+
+void on_mouse(int evt, int x, int y, int flags, void* param) {
+	float calc=false;
+    if(evt == CV_EVENT_LBUTTONDOWN) {
+        //Point* ptPtr = (Point*)param;
+        printf("Point: (%d , %d)\n", x, y);
+        for(int i=0; i<centroids.size(); i++)
+        {
+        	if((x<=centroids[i].x +5 && x>=centroids[i].x -5) && (y<=centroids[i].y +5 && y>=centroids[i].y -5))
+        	{
+        		if(init.x == -1 && init.y==-1)
+        		{
+        			indexInit=i;
+        			init=centroids[i];
+        		}
+        		else if(fin.x == -1 && fin.y ==-1)
+        		{
+        			indexFin=i;
+        			fin=centroids[i];
+        			calc=true;
+        		}
+        		else
+        		{
+        			indexInit=i;
+        			indexFin=-1;
+        			init=centroids[i];
+        			fin=Point(-1,-1);
+        			path.clear();
+        		}
+        		printf("Centroid: %d \n", i);
+        		drawCentroids();
+        		if(calc)
+        			calculatePath();
+        	}
+        }
+    }
+}
+
+
 void compute_skeleton(Mat& src, Mat& dst)
 {
 	Mat skeleton = src.clone();
@@ -131,29 +219,30 @@ void compute_voronoi_graph(Mat& obstacles, vector<Point>& nodes, Mat& distances)
 
 int main(int argc, char const *argv[])
 {
+	init=Point(-1,-1);
+	fin=Point(-1,-1);
 	// Read map image (from argument or predefined file)
-	Mat map;
+	//Mat map;
 	if (argc > 1)
 	{
-		map = imread(argv[1], CV_LOAD_IMAGE_GRAYSCALE);
+		initMap = imread(argv[1], CV_LOAD_IMAGE_GRAYSCALE);
 	}
 	else
 	{
-		map = imread(MAP_FILE, CV_LOAD_IMAGE_GRAYSCALE);
+		initMap = imread(MAP_FILE, CV_LOAD_IMAGE_GRAYSCALE);
 	}
-	if (map.empty())
+	if (initMap.empty())
 	{
 		cout << "Could not load the image\n";
 		return 1;
 	}
 	// Resize to WINDOW_SIZE
-	resize(map, map, Size(WINDOW_SIZE,WINDOW_SIZE), 0, 0, CV_INTER_LINEAR);
+	resize(initMap, initMap, Size(WINDOW_SIZE,WINDOW_SIZE), 0, 0, CV_INTER_LINEAR);
 
 	//imshow("original map", map);
 	//waitKey(0);
 
-	Mat bin_map;
-	threshold(map, bin_map, 230, 255, THRESH_BINARY);
+	threshold(initMap, bin_map, 230, 255, THRESH_BINARY);
 	//imshow("binary map", bin_map);
 	//waitKey(0);
 
@@ -325,7 +414,7 @@ int main(int argc, char const *argv[])
 		}
 	}
 
-	Mat voronoi_map = map.clone();
+	Mat voronoi_map = initMap.clone();
 	cvtColor(voronoi_map, voronoi_map, CV_GRAY2BGR);
 	for (int i = 0; i < voronoi_points.size(); ++i)
 	{
@@ -385,7 +474,7 @@ int main(int argc, char const *argv[])
     //waitKey(0);
 
     Mat newImg = Mat::zeros(dst_norm_scaled.size(), CV_8UC3);
-    Mat final = map.clone();
+    Mat final = initMap.clone();
     cvtColor(final, final, CV_GRAY2BGR);
     vector<Point> corners_list;
     Mat puntitos = bin_map.clone();
@@ -411,7 +500,7 @@ int main(int argc, char const *argv[])
 
     // Take the detected corners and compute their centroids
     vector<Point> visited_corners;
-    vector<Point> centroids;
+    //vector<Point> centroids;
     vector<Point> current_group;
 
     Mat centroids_map = bin_map.clone();
@@ -441,14 +530,14 @@ int main(int argc, char const *argv[])
     // Compute the voronoi graph, being the centroids the nodes
 
     // Matrix to store the distance between each pair of nodes
-    Mat voronoi_distance_ij = Mat_<double>(centroids.size(), centroids.size());
+    voronoi_distance_ij = Mat_<double>(centroids.size(), centroids.size());
     compute_voronoi_graph(bin_map, centroids, voronoi_distance_ij);
 
     cout << voronoi_distance_ij << endl;
 
     // Draw graph
-    Mat centroids_bin_map = bin_map.clone();
-    centroids_map = map.clone();
+    centroids_bin_map = bin_map.clone();
+    centroids_map = initMap.clone();
     cvtColor(centroids_bin_map, centroids_bin_map, CV_GRAY2BGR);
     cvtColor(centroids_map, centroids_map, CV_GRAY2BGR);
     for (int i = 0; i < centroids.size(); ++i)
@@ -468,15 +557,9 @@ int main(int argc, char const *argv[])
     imshow("centroids bin", centroids_bin_map);
     waitKey(0);
 
-    vector<int> path;
-    double path_distance = ACOPlanner(centroids, 0, 5, voronoi_distance_ij, path);
-    cout << "Path distance: " << path_distance << ", size: " << path.size() << endl;
-    cout << "Path: ";
-    for (int i = 0; i < path.size(); ++i)
-    {
-    	cout << path[i] << " - ";
-    }
-    cout << endl;
+    setMouseCallback("centroids",on_mouse);
+
+    waitKey(0);
 
 	destroyAllWindows();
 	return 0;
