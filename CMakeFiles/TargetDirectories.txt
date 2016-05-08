@@ -1,3 +1,0 @@
-/Users/cabama/Documents/Programacion/opencv_workspace/SLAM_Voronoi/CMakeFiles/edit_cache.dir
-/Users/cabama/Documents/Programacion/opencv_workspace/SLAM_Voronoi/CMakeFiles/rebuild_cache.dir
-/Users/cabama/Documents/Programacion/opencv_workspace/SLAM_Voronoi/CMakeFiles/voronoi.dir
