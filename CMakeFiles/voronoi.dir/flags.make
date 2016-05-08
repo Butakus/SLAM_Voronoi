@@ -6,5 +6,5 @@ CXX_FLAGS =  -std=c++11
 
 CXX_DEFINES = -DROOT_PATH=\"/Users/cabama/Documents/Programacion/opencv_workspace/SLAM_Voronoi\"
 
-CXX_INCLUDES = -isystem /usr/local/include/opencv -isystem /usr/local/include 
+CXX_INCLUDES = -isystem /usr/local/include/opencv -isystem /usr/local/include -I/Users/cabama/Documents/Programacion/opencv_workspace/SLAM_Voronoi/src 
 

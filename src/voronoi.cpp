@@ -1,3 +1,5 @@
+#include "ACOPlanner.cpp"
+
 #include <iostream>
 #include <algorithm>
 #include <opencv2/opencv.hpp>
@@ -9,29 +11,38 @@ using namespace cv;
 #define WINDOW_SIZE 700
 
 
-// Variables globales
+// VARIABLES GLOBALES
+// Para el primer trackbard
 Mat dilero, before_dilero; // Imagen erosionada y dilatada; Se pone en global para el manejo del trackpad
 const int valor_slider_max = 10;
 const double eps_max = 20;  // Maximo tamaño para el sliderl.
 int valor_slider1, valor_slider2; // Valor de los slider.
+//Para el segundo trackbard
 Mat bin_map, frame_mixed;
 int eps_track; // Approximation accuracy. % difference between original arclength and new
 vector<vector<Point>> new_contours;
 vector<vector<Point>> approx_contours;
+// Variables globales Alvaro
+vector<Point> centroids;
+Mat voronoi_distance_ij;
+Mat centroids_bin_map;
+Mat initMap;
+Point init,fin;
+int indexInit, indexFin;
+vector<int> path;
 
 
 /*
  * Funcion callback del trackpad de erosion y dilatacion
  */
-
 void on_trackbar_dilero( int, void* )
 {	
 	erode(before_dilero, dilero, Mat(), Point(-1,-1), valor_slider1);
 	dilate(dilero, dilero, Mat(), Point(-1,-1), valor_slider2);
 	std::cout<<"La mierda de Pou me motiva."<<std::endl;
+	cout<<"Valor de la Erosion: "<< valor_slider1 << "; Valor Dilatacion: " << valor_slider2 << endl;
  	imshow( "Dilatacion_Erosion", dilero );
 }
-
 
 /*
  * Funcion callback para simplificar en poligonos mas simples.
@@ -43,6 +54,7 @@ void on_trackbar_poligon(int, void*)
 
 	double eps = eps_track * 0.001;
 	approx_contours.resize(new_contours.size());
+	int num_contours = 0;
 	//Mat frame_contours2 = Mat::zeros(frame_mixed	.size(), CV_8UC3);
 	for (int i = 0; i < new_contours.size(); ++i)
 	{
@@ -51,13 +63,92 @@ void on_trackbar_poligon(int, void*)
 		cout << "\tarea: " << contourArea(approx_contours[i], true) << endl;
 		cout << "\tlength: " << arcLength(Mat(approx_contours[i]), true) << endl;
 		cout << "\tpoints: " << approx_contours[i].size() << endl;
+		num_contours += approx_contours[i].size();
 		//drawContours(frame_contours2, approx_contours, i, Scalar(0,0,255), 1, 8, 0, 0, Point(0,0));
 		drawContours(frame_mixed, approx_contours, i, Scalar(0,0,255), 2, 8, 0, 0, Point(0,0));
 	}
 	//imshow("Contours", frame_contours);
+	cout << "EPS: " << eps << "Numero de contornos:" << num_contours;
 	imshow("Mixed", frame_mixed);
 }
 
+void drawCentroids()
+{
+	centroids_bin_map = initMap.clone();
+    cvtColor(centroids_bin_map, centroids_bin_map, CV_GRAY2RGB);
+    for (int i = 0; i < centroids.size(); i++)
+    {
+    	circle( centroids_bin_map, centroids[i], 4, Scalar(255,0,0), CV_FILLED, 8, 0 );
+    }
+    
+    for (int i = 0; i < path.size(); ++i)
+    {
+    	circle( centroids_bin_map, centroids[path[i]], 4, Scalar(0,100,255), CV_FILLED, 8, 0 );
+    }
+
+    for (int i = 0; i < centroids.size(); i++)
+    {
+    	if(centroids[i].x == init.x && centroids[i].y == init.y)
+    		circle( centroids_bin_map, centroids[i], 4, Scalar(0,255,0), CV_FILLED, 8, 0 );
+    	else if(centroids[i].x == fin.x && centroids[i].y == fin.y)
+    		circle( centroids_bin_map, centroids[i], 4, Scalar(0,0,255), CV_FILLED, 8, 0 );
+    }
+
+    imshow("centroids", centroids_bin_map);
+}
+
+void calculatePath()
+{
+	if(indexInit>-1 && indexFin>-1)
+	{
+	    double path_distance = ACOPlanner(centroids, indexInit, indexFin, voronoi_distance_ij, path);
+	    cout << "Path distance: " << path_distance << ", size: " << path.size() << endl;
+	    cout << "Path: ";
+	    for (int i = 0; i < path.size(); ++i)
+	    {
+	    	cout << path[i] << " - ";
+	    }
+	    cout << endl;
+	    drawCentroids();
+	}
+}
+
+void on_mouse(int evt, int x, int y, int flags, void* param) {
+	float calc=false;
+    if(evt == CV_EVENT_LBUTTONDOWN) {
+        //Point* ptPtr = (Point*)param;
+        printf("Point: (%d , %d)\n", x, y);
+        for(int i=0; i<centroids.size(); i++)
+        {
+        	if((x<=centroids[i].x +5 && x>=centroids[i].x -5) && (y<=centroids[i].y +5 && y>=centroids[i].y -5))
+        	{
+        		if(init.x == -1 && init.y==-1)
+        		{
+        			indexInit=i;
+        			init=centroids[i];
+        		}
+        		else if(fin.x == -1 && fin.y ==-1)
+        		{
+        			indexFin=i;
+        			fin=centroids[i];
+        			calc=true;
+        		}
+        		else
+        		{
+        			indexInit=i;
+        			indexFin=-1;
+        			init=centroids[i];
+        			fin=Point(-1,-1);
+        			path.clear();
+        		}
+        		printf("Centroid: %d \n", i);
+        		drawCentroids();
+        		if(calc)
+        			calculatePath();
+        	}
+        }
+    }
+}
 
 void compute_skeleton(Mat& src, Mat& dst)
 {
@@ -141,12 +232,6 @@ Point compute_centroid(vector<Point>& current_group)
 	return centroid;
 }
 
-double euclideanDist(Point p, Point q)
-{
-    Point diff = p - q;
-    return sqrt(diff.x*diff.x + diff.y*diff.y);
-}
-
 void compute_voronoi_graph(Mat& obstacles, vector<Point>& nodes, Mat& distances)
 {
 	distances.setTo(0.0);
@@ -186,28 +271,31 @@ void compute_voronoi_graph(Mat& obstacles, vector<Point>& nodes, Mat& distances)
 
 int main(int argc, char const *argv[])
 {
+	init=Point(-1,-1);
+	fin=Point(-1,-1);
 	// Read map image (from argument or predefined file)
-	Mat map;
+	//Mat map;
 	if (argc > 1)
 	{
-		map = imread(argv[1], CV_LOAD_IMAGE_GRAYSCALE);
+		initMap = imread(argv[1], CV_LOAD_IMAGE_GRAYSCALE);
 	}
 	else
 	{
-		map = imread(MAP_FILE, CV_LOAD_IMAGE_GRAYSCALE);
+		initMap = imread(MAP_FILE, CV_LOAD_IMAGE_GRAYSCALE);
 	}
-	if (map.empty())
+	if (initMap.empty())
 	{
 		cout << "Could not load the image\n";
 		return 1;
 	}
 	// Resize to WINDOW_SIZE
-	resize(map, map, Size(WINDOW_SIZE,WINDOW_SIZE), 0, 0, CV_INTER_LINEAR);
+	resize(initMap, initMap, Size(WINDOW_SIZE,WINDOW_SIZE), 0, 0, CV_INTER_LINEAR);
 
 	//imshow("original map", map);
 	//waitKey(0);
 
-	threshold(map, bin_map, 230, 255, THRESH_BINARY);
+
+	threshold(initMap, bin_map, 230, 255, THRESH_BINARY);
 	//imshow("binary map", bin_map);
 	//waitKey(0);
 
@@ -395,7 +483,7 @@ int main(int argc, char const *argv[])
 		}
 	}
 
-	Mat voronoi_map = map.clone();
+	Mat voronoi_map = initMap.clone();
 	cvtColor(voronoi_map, voronoi_map, CV_GRAY2BGR);
 	for (int i = 0; i < voronoi_points.size(); ++i)
 	{
@@ -455,7 +543,7 @@ int main(int argc, char const *argv[])
     //waitKey(0);
 
     Mat newImg = Mat::zeros(dst_norm_scaled.size(), CV_8UC3);
-    Mat final = map.clone();
+    Mat final = initMap.clone();
     cvtColor(final, final, CV_GRAY2BGR);
     vector<Point> corners_list;
     Mat puntitos = bin_map.clone();
@@ -481,7 +569,7 @@ int main(int argc, char const *argv[])
 
     // Take the detected corners and compute their centroids
     vector<Point> visited_corners;
-    vector<Point> centroids;
+    //vector<Point> centroids;
     vector<Point> current_group;
 
     Mat centroids_map = bin_map.clone();
@@ -511,14 +599,14 @@ int main(int argc, char const *argv[])
     // Compute the voronoi graph, being the centroids the nodes
 
     // Matrix to store the distance between each pair of nodes
-    Mat voronoi_distance_ij = Mat_<double>(centroids.size(), centroids.size());
+    voronoi_distance_ij = Mat_<double>(centroids.size(), centroids.size());
     compute_voronoi_graph(bin_map, centroids, voronoi_distance_ij);
 
-    //cout << voronoi_distance_ij << endl;
+    cout << voronoi_distance_ij << endl;
 
     // Draw graph
-    Mat centroids_bin_map = bin_map.clone();
-    centroids_map = map.clone();
+    centroids_bin_map = bin_map.clone();
+    centroids_map = initMap.clone();
     cvtColor(centroids_bin_map, centroids_bin_map, CV_GRAY2BGR);
     cvtColor(centroids_map, centroids_map, CV_GRAY2BGR);
     for (int i = 0; i < centroids.size(); ++i)
@@ -538,6 +626,9 @@ int main(int argc, char const *argv[])
     imshow("centroids bin", centroids_bin_map);
     waitKey(0);
 
+    setMouseCallback("centroids",on_mouse);
+
+    waitKey(0);
 
 	destroyAllWindows();
 	return 0;
