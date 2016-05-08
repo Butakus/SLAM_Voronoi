@@ -115,7 +115,7 @@ double computeAntSolution (vector<Point>& nodes, int start_node, int end_node, M
 		}
 		if (empty)
 		{
-			cout << "No more nodes to jump" << endl;
+			//cout << "No more nodes to jump" << endl;
 			solution_path.clear();
 			return 999999.9;
 		}

@@ -59,16 +59,12 @@ void on_trackbar_poligon(int, void*)
 	for (int i = 0; i < new_contours.size(); ++i)
 	{
 		approxPolyDP( Mat(new_contours[i]), approx_contours[i], arcLength(Mat(new_contours[i]), true)*eps, true);
-		cout << "Approx contour " << i << endl;
-		cout << "\tarea: " << contourArea(approx_contours[i], true) << endl;
-		cout << "\tlength: " << arcLength(Mat(approx_contours[i]), true) << endl;
-		cout << "\tpoints: " << approx_contours[i].size() << endl;
 		num_contours += approx_contours[i].size();
 		//drawContours(frame_contours2, approx_contours, i, Scalar(0,0,255), 1, 8, 0, 0, Point(0,0));
 		drawContours(frame_mixed, approx_contours, i, Scalar(0,0,255), 2, 8, 0, 0, Point(0,0));
 	}
 	//imshow("Contours", frame_contours);
-	cout << "EPS: " << eps << "Numero de contornos:" << num_contours;
+	cout << "EPS: " << eps << "\nNumero de contornos:" << num_contours << endl;
 	imshow("Mixed", frame_mixed);
 }
 
@@ -291,8 +287,8 @@ int main(int argc, char const *argv[])
 	// Resize to WINDOW_SIZE
 	resize(initMap, initMap, Size(WINDOW_SIZE,WINDOW_SIZE), 0, 0, CV_INTER_LINEAR);
 
-	//imshow("original map", map);
-	//waitKey(0);
+	imshow("original map", initMap);
+	waitKey(0);
 
 
 	threshold(initMap, bin_map, 230, 255, THRESH_BINARY);
@@ -320,7 +316,8 @@ int main(int argc, char const *argv[])
 	on_trackbar_dilero( valor_slider1, 0 );
 	// Dilate 4 times (make free space bigger)
 	waitKey(0);
-
+	bin_map = dilero.clone();
+	destroyWindow("Dilatacion_Erosion");
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
@@ -344,10 +341,6 @@ int main(int argc, char const *argv[])
 	Mat frame_contours = Mat::zeros(bin_map.size(), CV_8UC3);
 	for (size_t i = 0; i < contours.size(); ++i)
 	{
-		cout << "Contour " << i << endl;
-		cout << "\tarea: " << contourArea(contours[i], true) << endl;
-		cout << "\tlength: " << arcLength(Mat(contours[i]), true) << endl;
-		cout << "\tpoints: " << contours[i].size() << endl;
 		if (contourArea(contours[i], true) < 0)
 		{
 			new_contours.push_back(contours[i]);
@@ -381,6 +374,7 @@ int main(int argc, char const *argv[])
 	on_trackbar_poligon( eps_track, 0 );
 	// Esperamos iteracción con teclas
 	waitKey(0);
+	destroyWindow("Mixed");
 
 // - - - - - - - - - - - - - - - -- - -  - -- - - - - - - - - - - - - - - -
 
@@ -514,8 +508,8 @@ int main(int argc, char const *argv[])
 	{
 		voronoi_map.at<uchar>(voronoi_points[i]) = 255;
 	}
-	imshow("voronoi bin", voronoi_map);
-	waitKey(0);
+	//imshow("voronoi bin", voronoi_map);
+	//waitKey(0);
 
 /*
 	// Remove filled areas
