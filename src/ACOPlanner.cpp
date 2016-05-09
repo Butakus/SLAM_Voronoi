@@ -29,7 +29,7 @@ using namespace cv;
 /* Initialize some variables */
 
 // Maximum running time. The time the algorithm will be running
-double maxExecTimeSecs = 10.0;
+double maxExecTimeSecs = 5.0;
 
 // Number of ants
 const int numAnts = 10;
@@ -37,14 +37,13 @@ const int numAnts = 10;
 // Pheromones factor
 double alpha = 1.0;
 // Heuristic benefit factor
-double beta = 1.0;
+double beta = 2.0;
 
 // Percentage [0-1] of pheromones evaporation in each iteration
 double evaporationFactor = 0.5;
 
 // Random seed
 long randomSeed = 5;
-
 
 
 /* Receives a vector with values proportional to the probabilities p[s] of each option s. Returns the index of the sample chosen. 
@@ -211,6 +210,5 @@ double ACOPlanner(vector<Point>& nodes, int start_node, int end_node, Mat graph_
 			}
 		}
 	}
-	cout << "Finished" << endl;
 	return best_cost;
 }
