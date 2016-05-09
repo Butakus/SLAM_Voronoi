@@ -109,7 +109,6 @@ void drawCentroids()
     if (indexInit != -1) circle( centroids_map, centroids[indexInit], 4, Scalar(0,255,0), CV_FILLED, 8, 0 );
     if (indexFin != -1) circle( centroids_map, centroids[indexFin], 4, Scalar(0,0,255), CV_FILLED, 8, 0 );
 
-    cout << centroids[indexInit] << "," << centroids[indexFin] << endl;
     imshow("centroids", centroids_map);
 }
 
@@ -201,7 +200,6 @@ void on_mouse(int evt, int x, int y, int flags, void* param) {
         {
             // User didn't clicked on an existing node. Create a new one
             indexClicked = centroids.size();
-            cout << "Adding new node in " <<  x << "," << y << endl;
             Point new_p = Point(x,y);
             centroids.push_back(new_p);
             grafos.clear();
@@ -236,9 +234,8 @@ void on_mouse(int evt, int x, int y, int flags, void* param) {
         {
             indexInit=indexClicked;
             indexFin=-1;
-            cout << "Reset" << endl;
             cout << "indexInit: " << indexInit << endl;
-            cout << "indexFin: " << indexFin << endl;
+
             path.clear();
             camino.clear();
             drawCentroids();
@@ -664,6 +661,22 @@ int main(int argc, char const *argv[])
     waitKey(0);
     setMouseCallback("centroids",on_mouse);
 
+    int key = -1;
+    cout << "Press 'q' to quit" << endl;
+    while (key != 'q')
+    {
+        key = waitKey(30) & 0x00ff;
+        if (key == 'a' && alg == 0)
+        {
+            cout << "Change planning algorithm to A*" << endl;
+            alg = 1;
+        }
+        else if (key == 'a' && alg == 1)
+        {
+            cout << "Change planning algorithm to ACO" << endl;
+            alg = 0;
+        }
+    }
     waitKey(0);
 
     destroyAllWindows();
