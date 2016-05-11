@@ -1,6 +1,6 @@
-#include "ACOPlanner.cpp"
-#include "AStar.h"
-#include "Node.h"
+#include <aco/ACOPlanner.h>
+#include <astar/AStar.h>
+#include <astar/Node.h>
 
 #include <iostream>
 #include <algorithm>
@@ -27,6 +27,8 @@ vector<vector<Point>> approx_contours;
 
 // Plan variables
 int alg = 0; //alg = 0 -> ACO, alg = 1 -> AStar
+
+ACOPlanner aco;
 
 vector<Point> centroids, centroids_original;
 Mat voronoi_distance_ij, voronoi_distance_original;
@@ -118,7 +120,7 @@ void calculatePath()
     {
         if(alg == 0)
         {
-            double path_distance = ACOPlanner(centroids, indexInit, indexFin, voronoi_distance_ij, path);
+            double path_distance = aco.computePath(indexInit, indexFin, voronoi_distance_ij, path);
             cout << "Path distance: " << path_distance << ", size: " << path.size() << endl;
             cout << "Path: ";
             for (int i = 0; i < path.size(); ++i)
@@ -136,6 +138,12 @@ void calculatePath()
     }
 }
 
+// Compute the euclidean distance of 2 Points (OpenCV point type)
+double euclideanDist(Point p, Point q)
+{
+    Point diff = p - q;
+    return sqrt(diff.x*diff.x + diff.y*diff.y);
+}
 
 void compute_voronoi_graph()
 {
@@ -157,14 +165,14 @@ void compute_voronoi_graph()
                 }
             }
             // Compute distance
+            double d = euclideanDist(centroids[i], centroids[j]);
             if (obstacle_in_line)
             {
-                voronoi_distance_ij.at<double>(i,j) = -1;
-                voronoi_distance_ij.at<double>(j,i) = -1;
+                voronoi_distance_ij.at<double>(i,j) = -d;
+                voronoi_distance_ij.at<double>(j,i) = -d;
             }
             else
             {
-                double d = euclideanDist(centroids[i], centroids[j]);
                 voronoi_distance_ij.at<double>(i,j) = d;
                 voronoi_distance_ij.at<double>(j,i) = d;
                 grafos[i]->insertAdjacent(Edge(grafos[j], d));
@@ -227,7 +235,6 @@ void on_mouse(int evt, int x, int y, int flags, void* param) {
             calculatePath();
             // clear extra graphs
             voronoi_distance_ij = voronoi_distance_original.clone();
-            //grafos = grafos_original;
             centroids = centroids_original;
         }
         else
@@ -395,10 +402,6 @@ int main(int argc, char const *argv[])
             new_contours.push_back(contours[i]);
             drawContours(frame_contours, contours, i, Scalar(0,255,0), 1, 8, 0, 0, Point(0,0));
         }
-        else
-        {
-            cout << "Positive area. Skipping..." << endl;
-        }
     }
     //imshow("Contours", frame_contours);
     //waitKey(0);
@@ -462,7 +465,6 @@ int main(int argc, char const *argv[])
     }
 
     float distance = 0;
-    int region = -1;
     float min_dist = 99999;
     vector<Point> voronoi_points;
 
@@ -470,10 +472,9 @@ int main(int argc, char const *argv[])
     {
         for (int j = 0; j < bin_map.cols; ++j)
         {
-            region = -1;
             min_dist = 9999;
             // Store the distances from a point to each obstacle to sort them (and the obstacle index)
-            vector<pair<float,int>> point_obstacle_dist;
+            vector<float> point_obstacle_dist;
             point_obstacle_dist.resize(num_contours);
             if (bin_map.at<uchar>(i,j) == 255)
             {
@@ -481,41 +482,19 @@ int main(int argc, char const *argv[])
                 {
                     distance = abs(pointPolygonTest(obstacles_contours[k], Point(j,i), true));
                     distance_maps[k].at<float>(i,j) = distance;
-                    point_obstacle_dist[k] = make_pair(distance, k);
+                    point_obstacle_dist[k] = distance;
                     //cout << "Dist: " << distance << ", " << distance_maps[k].at<float>(i,j) << endl;
                 }
                 // Sort distances (lowest first)
                 sort(point_obstacle_dist.begin(), point_obstacle_dist.end());
                 if (num_contours >= 2)
                 {
-                    if (abs(point_obstacle_dist[0].first - point_obstacle_dist[1].first) < 1)
+                    if (abs(point_obstacle_dist[0] - point_obstacle_dist[1]) < 1)
                     {
                         // At least the 2 closest obstacles are at the same distance
                         voronoi_points.push_back(Point(j,i));
-                        region = num_contours;
-                    }
-                    else
-                    {
-                        // 1 obstacle closer then the others
-                        region = point_obstacle_dist[0].second;
                     }
                 }
-                /*
-                switch (region)
-                {
-                    case 0:
-                        draw_distance_map.at<Vec3b>(i,j) = Vec3b(255,0,0);
-                        break;
-                    case 1:
-                        draw_distance_map.at<Vec3b>(i,j) = Vec3b(0,255,0);
-                        break;
-                    case 2:
-                        draw_distance_map.at<Vec3b>(i,j) = Vec3b(0,0,255);
-                        break;
-                    default:
-                        break;
-                }
-                */
             }
         }
     }
@@ -543,7 +522,7 @@ int main(int argc, char const *argv[])
     //waitKey(0);
 
 
-    // Try to compute the real voronoi graph (nodes and edges) from the set of voronoi points
+    // Compute the real voronoi graph (nodes and edges) from the set of voronoi points
     voronoi_map = Mat(bin_map.size(), CV_8UC1, Scalar(0));
     for (int i = 0; i < voronoi_points.size(); ++i)
     {
@@ -612,7 +591,6 @@ int main(int argc, char const *argv[])
             // Compute centroid of points in current_group
             Point centroid = compute_centroid(current_group);
             cout << "Group size: " << current_group.size() << endl;
-            //Point centroid;
             centroids.push_back(centroid);
             grafos.push_back(new Node(Point2f(centroid.x,centroid.y),nullptr,0.0f));
             grafos_original.push_back(new Node(Point2f(centroid.x,centroid.y),nullptr,0.0f));
@@ -662,6 +640,7 @@ int main(int argc, char const *argv[])
     setMouseCallback("centroids",on_mouse);
 
     int key = -1;
+    cout << "Press 'a' to change the algorithm" << endl;
     cout << "Press 'q' to quit" << endl;
     while (key != 'q')
     {

@@ -2,7 +2,8 @@
 
 Take occupancy grid maps created with SLAM algorithms and process them to compute the Voronoi graph in the free space.
 
-Path planning algorithms can be used later on that graph to compute the shortest path between 2 points.
+After that you can use different planning algorithms to compute the sortest path between 2 points.
+Currently A* and ACO algorithms are imlpemented for the path planning.
 
 ### How to install
 
@@ -13,4 +14,4 @@ make
 ```
 
 ### Notes
-You can find some maps inside the data directory, but the parameters are currently adjusted to woek with map_0.png, and it shuold not work with other images.
+You can find some maps inside the data directory. The parameters can be adjusted manually with the trackbars to adapt them to each map.
